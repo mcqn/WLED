@@ -14,6 +14,7 @@
 #include "../usermods/Temperature/usermod_temperature.h"
 #endif
 //#include "usermod_v2_empty.h"
+#include "usermod_wifi_status.h"
 
 void registerUsermods()
 {
@@ -27,4 +28,5 @@ void registerUsermods()
   usermods.add(new UsermodTemperature());
   #endif
   //usermods.add(new UsermodRenameMe());
+  usermods.add(new UsermodWiFiStatus());
 }
