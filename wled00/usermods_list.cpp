@@ -15,6 +15,7 @@
 #endif
 //#include "usermod_v2_empty.h"
 #include "usermod_wifi_status.h"
+#include "usermod_mqtt_connection_status.h"
 
 void registerUsermods()
 {
@@ -29,4 +30,5 @@ void registerUsermods()
   #endif
   //usermods.add(new UsermodRenameMe());
   usermods.add(new UsermodWiFiStatus());
+  usermods.add(new UsermodMQTTConnectionStatus());
 }

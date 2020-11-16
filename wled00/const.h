@@ -14,14 +14,15 @@
 #define WLED_MAX_USERMODS 4
 
 //Usermod IDs
-#define USERMOD_ID_RESERVED       0            //Unused. Might indicate no usermod present
-#define USERMOD_ID_UNSPECIFIED    1            //Default value for a general user mod that does not specify a custom ID
-#define USERMOD_ID_EXAMPLE        2            //Usermod "usermod_v2_example.h"
-#define USERMOD_ID_TEMPERATURE    3            //Usermod "usermod_temperature.h"
-#define USERMOD_ID_FIXNETSERVICES 4            //Usermod "usermod_Fix_unreachable_netservices.h"
-#define USERMOD_ID_PIRSWITCH      5            //Usermod "usermod_PIR_sensor_switch.h"
-#define USERMOD_ID_IMU            6            //Usermod "usermod_mpu6050_imu.h"
-#define USERMOD_ID_WIFI_STATUS    7            //Usermod "usermod_wifi_status.h"
+#define USERMOD_ID_RESERVED              0     //Unused. Might indicate no usermod present
+#define USERMOD_ID_UNSPECIFIED           1     //Default value for a general user mod that does not specify a custom ID
+#define USERMOD_ID_EXAMPLE               2     //Usermod "usermod_v2_example.h"
+#define USERMOD_ID_TEMPERATURE           3     //Usermod "usermod_temperature.h"
+#define USERMOD_ID_FIXNETSERVICES        4     //Usermod "usermod_Fix_unreachable_netservices.h"
+#define USERMOD_ID_PIRSWITCH             5     //Usermod "usermod_PIR_sensor_switch.h"
+#define USERMOD_ID_IMU                   6     //Usermod "usermod_mpu6050_imu.h"
+#define USERMOD_ID_WIFI_STATUS           7     //Usermod "usermod_wifi_status.h"
+#define USERMOD_ID_MQTT_CONNECTED_STATUS 8     //Usermod "usermod_wifi_status.h"
 
 //Access point behavior
 #define AP_BEHAVIOR_BOOT_NO_CONN  0            //Open AP when no connection after boot
