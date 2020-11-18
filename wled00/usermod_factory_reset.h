@@ -6,16 +6,17 @@
  * Usermods allow you to add own functionality to WLED more easily
  * See: https://github.com/Aircoookie/WLED/wiki/Add-own-functionality
  * 
- * This usermod shows the MQTT broker connection status on an LED attached to pin 13
+ * This usermod uses a reset button also wired to IO4 to detect holding it down for
+ * an extended period upon reboot, at which point it resets the setting back to the
+ * defaults
  * 
  */
 
-class UsermodMQTTConnectionStatus : public Usermod {
+class UsermodFactoryReset : public Usermod {
   private:
     //Private class members. You can declare variables and functions only accessible to your usermod here
-    // We'll save state so we don't spend lots of time calling digitalWrite unnecessarily
-    bool iMQTTConnected = false;
-    int iMQTTConnectionLEDPin = 13;
+    const unsigned long kFactoryResetTimeout = 5000UL;
+    const int kResetPin = 4;
   public:
     //Functions called by WLED
 
@@ -24,8 +25,19 @@ class UsermodMQTTConnectionStatus : public Usermod {
      * You can use it to initialize variables, sensors or similar.
      */
     void setup() {
-      pinMode(iMQTTConnectionLEDPin, OUTPUT);
-      digitalWrite(iMQTTConnectionLEDPin, LOW);
+      pinMode(kResetPin, INPUT);
+      unsigned long startTime = millis();
+      while ((digitalRead(kResetPin) == HIGH) && (millis() - startTime < kFactoryResetTimeout)) {
+        // See how long the reset button is held down
+        delay(100);
+      }
+      if (millis() - startTime >= kFactoryResetTimeout) {
+        DEBUG_PRINTLN("Need to perform a factory reset");
+        clearEEPROM();
+        // Although clearEEPROM erases all our settings, it's after they've been loaded, so
+        // we need to reboot to have them take effect
+        WLED::instance().reset();
+      }
     }
 
 
@@ -48,15 +60,6 @@ class UsermodMQTTConnectionStatus : public Usermod {
      *    Instead, use a timer check as shown here.
      */
     void loop() {
-      if (WLED_MQTT_CONNECTED && !iMQTTConnected) {
-        // We've *just* connected
-        digitalWrite(iMQTTConnectionLEDPin, HIGH);
-        iMQTTConnected = true;
-      } else if (!WLED_MQTT_CONNECTED && iMQTTConnected) {
-        // We've *just* disconnected
-        digitalWrite(iMQTTConnectionLEDPin, LOW);
-        iMQTTConnected = false;
-      }
     }
 
 
@@ -107,7 +110,7 @@ class UsermodMQTTConnectionStatus : public Usermod {
      */
     uint16_t getId()
     {
-      return USERMOD_ID_MQTT_CONNECTION_STATUS;
+      return USERMOD_ID_FACTORY_RESET;
     }
 
    //More methods can be added in the future, this example will then be extended.

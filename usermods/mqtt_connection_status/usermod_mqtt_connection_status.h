@@ -107,7 +107,7 @@ class UsermodMQTTConnectionStatus : public Usermod {
      */
     uint16_t getId()
     {
-      return USERMOD_ID_MQTT_CONNECTED_STATUS;
+      return USERMOD_ID_MQTT_CONNECTION_STATUS;
     }
 
    //More methods can be added in the future, this example will then be extended.
