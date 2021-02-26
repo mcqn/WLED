@@ -10,6 +10,59 @@ WLED::WLED()
 {
 }
 
+#ifdef WLED_USE_ETHERNET
+// settings for various ethernet boards
+typedef struct EthernetSettings {
+  uint8_t        eth_address;
+  int            eth_power;
+  int            eth_mdc;
+  int            eth_mdio;
+  eth_phy_type_t eth_type;
+  eth_clock_mode_t eth_clk_mode;
+} ethernet_settings;
+
+ethernet_settings ethernetBoards[] = {
+  // None
+  {
+  },
+  
+  // WT32-EHT01
+  // Please note, from my testing only these pins work for LED outputs:
+  //   IO2, IO4, IO12, IO14, IO15
+  // These pins do not appear to work from my testing:
+  //   IO35, IO36, IO39
+  {
+    1,                 // eth_address, 
+    16,                // eth_power, 
+    23,                // eth_mdc, 
+    18,                // eth_mdio, 
+    ETH_PHY_LAN8720,   // eth_type,
+    ETH_CLOCK_GPIO0_IN // eth_clk_mode
+  },
+
+  // ESP32-POE
+  {
+     0,                  // eth_address, 
+    12,                  // eth_power, 
+    23,                  // eth_mdc, 
+    18,                  // eth_mdio, 
+    ETH_PHY_LAN8720,     // eth_type,
+    ETH_CLOCK_GPIO17_OUT // eth_clk_mode
+  },
+
+   // WESP32
+  {
+    0,			              // eth_address,
+    -1,			              // eth_power,
+    16,			              // eth_mdc,
+    17,			              // eth_mdio,
+    ETH_PHY_LAN8720,      // eth_type,
+    ETH_CLOCK_GPIO0_IN	  // eth_clk_mode
+  }
+};
+
+#endif
+
 // turns all LEDs off and restarts ESP
 void WLED::reset()
 {
@@ -132,6 +185,10 @@ void WLED::loop()
 
   if (doReboot)
     reset();
+  if (doCloseFile) {
+    closeFile();
+    yield();
+  }
 
   if (!realtimeMode || realtimeOverride)  // block stuff if WARLS/Adalight is enabled
   {
@@ -142,10 +199,17 @@ void WLED::loop()
       ArduinoOTA.handle();
 #endif
     handleNightlight();
+    handlePlaylist();
     yield();
 
     handleHue();
     handleBlynk();
+
+    /*if (presetToApply) {
+      applyPreset(presetToApply);
+      presetToApply = 0;
+    }*/
+
     yield();
 
     if (!offMode)
@@ -193,17 +257,6 @@ void WLED::loop()
 
 void WLED::setup()
 {
-  EEPROM.begin(EEPSIZE);
-  ledCount = EEPROM.read(229) + ((EEPROM.read(398) << 8) & 0xFF00);
-  if (ledCount > MAX_LEDS || ledCount == 0)
-    ledCount = 30;
-
-#ifdef ESP8266
-  #if LEDPIN == 3
-    if (ledCount > MAX_LEDS_DMA)
-      ledCount = MAX_LEDS_DMA;        // DMA method uses too much ram
-  #endif
-#endif
   Serial.begin(115200);
   Serial.setTimeout(50);
   DEBUG_PRINTLN();
@@ -224,25 +277,33 @@ void WLED::setup()
   DEBUG_PRINTLN(ESP.getFreeHeap());
   registerUsermods();
 
-  strip.init(EEPROM.read(372), ledCount, EEPROM.read(2204));        // init LEDs quickly
-  strip.setBrightness(0);
+  //strip.init(EEPROM.read(372), ledCount, EEPROM.read(2204));        // init LEDs quickly
+  //strip.setBrightness(0);
 
-  DEBUG_PRINT(F("LEDs inited. heap usage ~"));
-  DEBUG_PRINTLN(heapPreAlloc - ESP.getFreeHeap());
+  //DEBUG_PRINT(F("LEDs inited. heap usage ~"));
+  //DEBUG_PRINTLN(heapPreAlloc - ESP.getFreeHeap());
 
-#ifndef WLED_DISABLE_FILESYSTEM
-  #ifdef ARDUINO_ARCH_ESP32
-    SPIFFS.begin(true);
-  #endif
-    SPIFFS.begin();
+
+  bool fsinit = false;
+  DEBUGFS_PRINTLN(F("Mount FS"));
+#ifdef ARDUINO_ARCH_ESP32
+  fsinit = WLED_FS.begin(true);
+#else
+  fsinit = WLED_FS.begin();
 #endif
+  if (!fsinit) {
+    DEBUGFS_PRINTLN(F("FS failed!"));
+    errorFlag = ERR_FS_BEGIN;
+  } else deEEP();
+  updateFSInfo();
+  deserializeConfig();
 
 #if STATUSLED && STATUSLED != LEDPIN
   pinMode(STATUSLED, OUTPUT);
 #endif
 
-  DEBUG_PRINTLN(F("Load EEPROM"));
-  loadSettingsFromEEPROM(true);
+  //DEBUG_PRINTLN(F("Load EEPROM"));
+  //loadSettingsFromEEPROM();
   beginStrip();
   userSetup();
   usermods.setup();
@@ -251,8 +312,6 @@ void WLED::setup()
   WiFi.persistent(false);
   WiFi.onEvent(WiFiEvent);
 
-  if (macroBoot > 0)
-    applyMacro(macroBoot);
   Serial.println(F("Ada"));
 
   // generate module IDs
@@ -297,18 +356,37 @@ void WLED::setup()
 void WLED::beginStrip()
 {
   // Initialize NeoPixel Strip and button
+  #ifdef ESP8266
+  #if LEDPIN == 3
+    if (ledCount > MAX_LEDS_DMA)
+      ledCount = MAX_LEDS_DMA;        // DMA method uses too much ram
+  #endif
+  #endif
+
+  if (ledCount > MAX_LEDS || ledCount == 0)
+    ledCount = 30;
+
+  strip.init(useRGBW, ledCount, skipFirstLed);
+  strip.setBrightness(0);
   strip.setShowCallback(handleOverlayDraw);
 
-#ifdef BTNPIN
+#if defined(BTNPIN) && BTNPIN > -1
+  pinManager.allocatePin(BTNPIN, false);
   pinMode(BTNPIN, INPUT_PULLUP);
 #endif
 
-  if (bootPreset > 0)
-    applyPreset(bootPreset, turnOnAtBoot);
+  if (bootPreset > 0) applyPreset(bootPreset);
+  if (turnOnAtBoot) {
+    if (briS > 0) bri = briS;
+    else if (bri == 0) bri = 128;
+  } else {
+    briLast = briS; bri = 0;
+  }
   colorUpdated(NOTIFIER_CALL_MODE_INIT);
 
 // init relay pin
 #if RLYPIN >= 0
+  pinManager.allocatePin(RLYPIN);
   pinMode(RLYPIN, OUTPUT);
 #if RLYMDE
   digitalWrite(RLYPIN, bri);
@@ -318,7 +396,7 @@ void WLED::beginStrip()
 #endif
 
   // disable button if it is "pressed" unintentionally
-#if defined(BTNPIN) || defined(TOUCHPIN)
+#if (defined(BTNPIN) && BTNPIN > -1) || defined(TOUCHPIN)
   if (isButtonPressed())
     buttonEnabled = false;
 #else
@@ -353,6 +431,7 @@ void WLED::initAP(bool resetAP)
     if (udpPort2 > 0 && udpPort2 != ntpLocalPort && udpPort2 != udpPort && udpPort2 != udpRgbPort) {
       udp2Connected = notifier2Udp.begin(udpPort2);
     }
+    e131.begin(false, e131Port, e131Universe, E131_MAX_UNIVERSE_COUNT);
   
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.start(53, "*", WiFi.softAPIP());
@@ -367,7 +446,18 @@ void WLED::initConnection()
   #endif
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_ETHERNET)
-  ETH.begin();
+  // Only initialize ethernet board if not NONE
+  if (ethernetType != WLED_ETH_NONE) {
+    ethernet_settings es = ethernetBoards[ethernetType];
+    ETH.begin(
+      (uint8_t) es.eth_address, 
+      (int)     es.eth_power, 
+      (int)     es.eth_mdc, 
+      (int)     es.eth_mdio, 
+      (eth_phy_type_t)   es.eth_type,
+      (eth_clock_mode_t) es.eth_clk_mode
+    );
+  }
 #endif
 
   WiFi.disconnect(true);        // close old connections
@@ -467,7 +557,7 @@ void WLED::initInterfaces()
   if (ntpEnabled)
     ntpConnected = ntpUdp.begin(ntpLocalPort);
 
-  initBlynk(blynkApiKey);
+  initBlynk(blynkApiKey, blynkHost, blynkPort);
   e131.begin(e131Multicast, e131Port, e131Universe, E131_MAX_UNIVERSE_COUNT);
   reconnectHue();
   initMqtt();

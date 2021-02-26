@@ -219,6 +219,12 @@ void getSettingsJS(byte subPage, char* dest)
     sappend('v',SET_F("AC"),apChannel);
     sappend('c',SET_F("WS"),noWifiSleep);
 
+    #ifdef WLED_USE_ETHERNET
+    sappend('i',SET_F("ETH"),ethernetType);
+    #else
+    //hide ethernet setting if not compiled in
+    oappend(SET_F("document.getElementById('ethd').style.display='none';"));
+    #endif
 
     if (Network.isConnected()) //is connected
     {
@@ -251,6 +257,8 @@ void getSettingsJS(byte subPage, char* dest)
     #ifdef ESP8266
     #if LEDPIN == 3
     oappend(SET_F("d.Sf.LC.max=500;"));
+    #else
+    oappend(SET_F("d.Sf.LC.max=1500;"));
     #endif
     #endif
     sappend('v',SET_F("LC"),ledCount);
@@ -266,7 +274,7 @@ void getSettingsJS(byte subPage, char* dest)
 
     sappend('v',SET_F("CA"),briS);
     sappend('c',SET_F("EW"),useRGBW);
-    sappend('i',SET_F("CO"),strip.colorOrder);
+    sappend('i',SET_F("CO"),strip.getColorOrder());
     sappend('v',SET_F("AW"),strip.rgbwMode);
 
     sappend('c',SET_F("BO"),turnOnAtBoot);
@@ -321,13 +329,14 @@ void getSettingsJS(byte subPage, char* dest)
     sappends('s',SET_F("AI"),alexaInvocationName);
     sappend('c',SET_F("SA"),notifyAlexa);
     sappends('s',SET_F("BK"),(char*)((blynkEnabled)?SET_F("Hidden"):""));
+    sappends('s',SET_F("BH"),blynkHost);
+    sappend('v',SET_F("BP"),blynkPort);
 
     #ifdef WLED_ENABLE_MQTT
     sappend('c',SET_F("MQ"),mqttEnabled);
     sappends('s',SET_F("MS"),mqttServer);
     sappend('v',SET_F("MQPORT"),mqttPort);
     sappends('s',SET_F("MQUSER"),mqttUser);
-    sappends('s',SET_F("MQPASS"),mqttPass);
     byte l = strlen(mqttPass);
     char fpass[l+1]; //fill password field with ***
     fpass[l] = 0;
@@ -391,16 +400,7 @@ void getSettingsJS(byte subPage, char* dest)
     sappend('v',SET_F("CH"),countdownHour);
     sappend('v',SET_F("CM"),countdownMin);
     sappend('v',SET_F("CS"),countdownSec);
-    char k[4]; k[0]= 'M';
-    for (int i=1;i<17;i++)
-    {
-      char m[65];
-      loadMacro(i, m);
-      sprintf(k+1,"%i",i);
-      sappends('s',k,m);
-    }
 
-    sappend('v',SET_F("MB"),macroBoot);
     sappend('v',SET_F("A0"),macroAlexaOn);
     sappend('v',SET_F("A1"),macroAlexaOff);
     sappend('v',SET_F("MP"),macroButton);
@@ -409,6 +409,7 @@ void getSettingsJS(byte subPage, char* dest)
     sappend('v',SET_F("MN"),macroNl);
     sappend('v',SET_F("MD"),macroDoublePress);
 
+    char k[4];
     k[2] = 0; //Time macros
     for (int i = 0; i<8; i++)
     {
