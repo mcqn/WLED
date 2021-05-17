@@ -33,6 +33,7 @@ class UsermodFactoryReset : public Usermod {
       }
       if (millis() - startTime >= kFactoryResetTimeout) {
         DEBUG_PRINTLN("Need to perform a factory reset");
+        WLED_FS.format();
         clearEEPROM();
         // Although clearEEPROM erases all our settings, it's after they've been loaded, so
         // we need to reboot to have them take effect
